@@ -5,3 +5,9 @@ __pycache__/
 .DS_Store
 .playwright-mcp/
 scraped/
+report/*.aux
+report/*.log
+report/*.fls
+report/*.fdb_latexmk
+report/*.xdv
+report/*.out
