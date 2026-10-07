@@ -38,7 +38,7 @@ SIDEBAR = """<div class="db-side">
 <p class="db-muted">ร้านสมมติสำหรับเดโมงานวิชา NLP รูปรถได้รับอนุญาตจาก dbigbike.com ข้อมูลอื่นเป็นข้อมูลจำลอง</p>
 </div>"""
 CSS = """<style>
-[data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+[data-testid="stMainBlockContainer"] { padding-top: 4.5rem; }  /* clear the 3.75rem app header */
 /* hero: instrument-cluster band */
 .db-hero { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px 32px;
            background: #1B2733; color: #F7F8F9; border-radius: 8px; padding: 22px 24px; }
@@ -219,10 +219,15 @@ CITE = re.compile(r"\[([^\[\]]*?\.md(?:\s*,\s*[^\[\]]*?\.md)*)\]")
 
 
 def with_chips(text, sources):
-    """Escape the LLM text (it is rendered with unsafe_allow_html) and turn [file.md, …] into name chips."""
+    """Escape the LLM text (it is rendered with unsafe_allow_html) and turn [file.md, …] into name chips.
+    Each file gets one chip, at its first citation; the model often repeats a citation on every bullet."""
+    seen = set()
+
     def chips(m):
         files = [f.strip() for f in m.group(1).split(",")]
-        return "".join(f'<span class="db-cite" title="{esc(f)}">{esc(doc_name(f, sources))}</span>' for f in files)
+        new = [f for f in files if f not in seen]
+        seen.update(new)
+        return "".join(f'<span class="db-cite" title="{esc(f)}">{esc(doc_name(f, sources))}</span>' for f in new)
     return CITE.sub(chips, html.escape(text, quote=False))
 
 
