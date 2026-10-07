@@ -1,0 +1,21 @@
+[theme]
+base = "light"
+primaryColor = "#1B2733"
+backgroundColor = "#E6E8EB"
+secondaryBackgroundColor = "#F7F8F9"
+textColor = "#1B2733"
+linkColor = "#1B2733"
+linkUnderline = true
+borderColor = "#5E6B78"
+redColor = "#B3362C"
+font = "'IBM Plex Sans Thai':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500&display=swap"
+headingFont = "'Chakra Petch':https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&display=swap"
+baseFontSize = 15
+headingFontSizes = ["32px", "24px", "18px"]
+headingFontWeights = 600
+baseRadius = "small"
+
+[theme.sidebar]
+backgroundColor = "#F7F8F9"
+headingFontSizes = ["24px", "24px", "18px"]
+headingFontWeights = 600

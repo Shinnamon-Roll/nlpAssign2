@@ -1,0 +1,13 @@
+# torch: Streamlit Cloud installs with uv. Plain `torch` from PyPI on Linux pulls ~3 GB of
+# nvidia-* CUDA wheels. `--extra-index-url .../whl/cpu` is unsafe with uv: its "first-index"
+# strategy would then take numpy, pillow, requests, jinja2, etc. from the PyTorch mirror only.
+# So pin the CPU wheel by direct URL (196 MB) for Linux x86_64 + Python 3.12 (the Cloud setup),
+# and fall back to plain PyPI torch elsewhere (macOS wheels are CPU-only already).
+torch @ https://download.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl ; sys_platform == "linux" and platform_machine == "x86_64" and python_version == "3.12"
+torch==2.14.1 ; sys_platform != "linux" or platform_machine != "x86_64" or python_version != "3.12"
+streamlit
+sentence-transformers
+faiss-cpu
+google-genai
+pythainlp
+python-crfsuite  # backend for pythainlp sent_tokenize's default "crfcut" engine (1.2 MB wheel)
