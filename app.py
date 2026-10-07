@@ -53,6 +53,8 @@ CSS = """<style>
           font: 600 24px/1.2 'Chakra Petch', sans-serif; padding: 2px 10px; border-radius: 3px; }
 .db-tag small { font-size: 15px; }
 .db-card__note { color: #5E6B78; }
+.db-card__status { display: inline-block; margin: 0 0 6px; padding: 0 8px; border: 1px solid #1B2733;
+                   border-radius: 3px; font: 600 15px/1.6 'Chakra Petch', sans-serif; }
 .db-odo { display: flex; align-items: center; gap: 2px; margin: 0 0 8px; color: #5E6B78; }
 .db-odo__d { display: inline-block; min-width: 1.2em; padding: 1px 3px; border-radius: 2px; text-align: center;
              background: #1B2733; color: #F7F8F9; font: 600 15px/1.4 'Chakra Petch', sans-serif; }
@@ -91,18 +93,20 @@ def field(meta, key):
 
 
 def stock_line():
-    n = len(list(DATA.glob("bike_*.md")))
-    if not n:
+    files = list(DATA.glob("bike_*.md"))
+    if not files:
         return "กำลังอัปเดตข้อมูลรถในสต็อก"
+    reserved = sum("สถานะ: ติดจอง" in f.read_text(encoding="utf-8") for f in files)
+    n = f"{len(files) - reserved} คัน" + (f" ติดจอง {reserved} คัน" if reserved else "")
     try:
         text = (DATA / "inventory_summary.md").read_text(encoding="utf-8")
         m = re.search(r"ข้อมูล ณ วันที่:\s*(\d{4})-(\d{2})-(\d{2})", text)
     except OSError:
         m = None
     if not m:
-        return f"มีรถพร้อมขาย {n} คัน"
+        return f"มีรถพร้อมขาย {n}"
     y, mo, d = map(int, m.groups())
-    return f"สต็อกวันที่ {d} {TH_MONTHS[mo - 1]} {y + 543} มีรถพร้อมขาย {n} คัน"
+    return f"สต็อกวันที่ {d} {TH_MONTHS[mo - 1]} {y + 543} มีรถพร้อมขาย {n}"
 
 
 def odometer(v):
@@ -125,12 +129,17 @@ def bike_card(s):
     if img:
         out.append(f'<img class="db-card__img" src="{esc(img)}" alt="รูปรถ {esc(title)}" loading="lazy">')
     out.append(f'<div class="db-card__body"><p class="db-card__title">{esc(title)}</p>')
+    if (status := field(meta, "สถานะ")) and status != "พร้อมขาย":
+        out.append(f'<p class="db-card__status">{esc(status)}</p>')
     if price := field(meta, "ราคาขาย (บาท)"):
         out.append(f'<p class="db-tag">{esc(price)} <small>บาท</small></p>')
     if discount := field(meta, "ส่วนลด (บาท)"):
         out.append(f'<p class="db-card__note">ส่วนลด {esc(discount)} บาท</p>')
     if odo := field(meta, "เลขไมล์ (กม.)"):
         out.append(odometer(odo))
+    look = " ".join(f"{k}{v}" for k, v in (("สี", field(meta, "สี")), ("เกรดสภาพ ", field(meta, "เกรดสภาพ"))) if v)
+    if look:
+        out.append(f'<p class="db-card__note">{esc(look)}</p>')
     if is_http(s.get("url")):
         out.append(f'<p><a href="{esc(s["url"])}" {EXT}>ดูประกาศบนเว็บร้าน</a></p>')
     out.append("</div></div>")

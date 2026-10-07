@@ -41,18 +41,17 @@ SYSTEM_PROMPT = f"""คุณคือพี่ไมล์ ผู้ช่ว�
 กติกา:
 1. ตอบจากข้อมูลใน "เอกสารอ้างอิง" ที่ให้มาในข้อความล่าสุดเท่านั้น ห้ามใช้ความรู้ภายนอก
    แต่เปรียบเทียบ เรียงลำดับ นับ หรือกรองข้อมูลในเอกสารได้ เช่น หาคันที่ถูกที่สุด/ไมล์น้อยที่สุด หรือรถงบไม่เกิน 300,000 บาท
-   จากตารางใน [{INVENTORY}] (ตารางนี้คือรายการรถพร้อมขายทั้งหมด)
-2. อ้างอิงแหล่งที่มาด้วยชื่อไฟล์ในวงเล็บเหลี่ยม สะกดตรงตามที่ให้มา เช่น [bike_38_yamaha_mt09_2022.md]
+   จากตารางใน [{INVENTORY}] (ตารางนี้คือรถทุกคันในสต็อก ดูคอลัมน์ "สถานะ" ว่าพร้อมขายหรือติดจอง)
+2. อ้างอิงแหล่งที่มาด้วยชื่อไฟล์ในวงเล็บเหลี่ยม สะกดตรงตามที่ให้มา เช่น [bike_38_yamaha_mt-09_2022.md]
    อ้างแต่ละไฟล์ครั้งเดียว ท้ายประโยคหรือท้ายกลุ่ม bullet ที่ไฟล์นั้นรองรับ ไม่ต้องใส่ซ้ำทุก bullet
    ถ้าไฟล์ bike_*.md กับ {INVENTORY} ให้ข้อมูลเดียวกัน ให้อ้างเฉพาะไฟล์ bike_*.md
 3. ห้ามเดาหรือแต่งราคา สเปค เลขไมล์ เงื่อนไขไฟแนนซ์ อัตราดอกเบี้ย ระยะเวลารับประกัน หรือนโยบายร้านที่ไม่มีในเอกสาร
-   เลขไมล์ที่ปิดบางหลัก (เช่น 2x,xxx) ให้แสดงตามเอกสาร ห้ามเติมตัวเลขเอง
 4. ถ้าเอกสารไม่มีคำตอบ ให้ตอบขึ้นต้นด้วย "{NOT_FOUND}" ทันที ไม่ต้องอธิบายอย่างอื่น
    ถ้ามีคำตอบเพียงบางส่วน ให้ตอบส่วนที่มี แล้วบอกว่าส่วนที่เหลือ{NOT_FOUND}
 5. คำถามต่อเนื่อง (เช่น "คันนี้", "รุ่นนี้") ให้ดูจากประวัติแชตว่าหมายถึงรถคันไหน แต่ข้อเท็จจริงต้องมาจากเอกสารอ้างอิงเท่านั้น
 6. ตอบภาษาเดียวกับคำถาม (ถามไทยตอบไทย, ask in English -> answer in English;
    for a missing answer in English, still start with "{NOT_FOUND}" then add "(No information found in the documents.)")
-7. ตอบกระชับ สุภาพ แบบพนักงานขาย ใช้ bullet เมื่อเทียบหลายคัน"""
+7. ตอบกระชับ สุภาพ แบบพนักงานขาย ใช้ bullet เมื่อเทียบหลายคัน ไม่ต้องทักทายหรือแนะนำตัวในคำตอบ"""
 
 
 # ---------- load + clean ----------
@@ -206,11 +205,13 @@ def search(store, question, history=(), k=TOP_K):
 def _context(store, sources):
     parts, seen = [], set()
     for c in sources:
-        if c["source"] == INVENTORY:  # whole table so "cheapest / how many / under 300k" work
-            if INVENTORY in seen:
+        # whole file for the table ("cheapest / under 300k") and for bikes (follow-ups like
+        # "คันนี้ผ่อนเท่าไร" need the installment section that MAX_PER_SOURCE may have cut)
+        if c["source"] == INVENTORY or c["source"].startswith("bike_"):
+            if c["source"] in seen:
                 continue
-            seen.add(INVENTORY)
-            text = store["full_text"][INVENTORY]
+            seen.add(c["source"])
+            text = store["full_text"][c["source"]]
         else:
             text = c["text"]
         parts.append(f"[{c['source']}]\n{text}")
@@ -297,8 +298,8 @@ if __name__ == "__main__":
         import tomllib
         key = tomllib.loads((root / ".streamlit" / "secrets.toml").read_text())["GEMINI_API_KEY"]
         history = []
-        for q in ["Yamaha MT09 ราคาเท่าไร", "คันนี้ผ่อนเดือนละเท่าไร", "ดอกเบี้ยผ่อนกี่เปอร์เซ็นต์",
-                  "Which bike is the cheapest?", "มีรถราคาต่ำกว่า 100,000 บาทรุ่นอะไรบ้าง", "Honda Civic มือสองราคาเท่าไร"]:
+        for q in ["Yamaha MT-09 ราคาเท่าไร", "คันนี้ผ่อนเดือนละเท่าไร", "รถรหัสสต็อก MT043 คือรุ่นอะไร",
+                  "Which bike is the cheapest?", "รถคันไหนติดจองอยู่บ้าง", "มีบริการเช่ารถรายวันไหม"]:
             text, src = answer(store, q, history, key)
             print(f"\n>>> {q}\n{text}\n    sources: {[(h['source'], round(h['score'], 3)) for h in src]}")
             history += [{"role": "user", "content": q}, {"role": "assistant", "content": text}]
