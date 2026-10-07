@@ -380,7 +380,10 @@ with st.chat_message("assistant", avatar=BOT):
     st.markdown(WELCOME)
     st.pills("ลองถามแบบนี้", EXAMPLES, key="example", on_change=pick_example)
 
-if not st.session_state.messages and "pending" not in st.session_state:
+# read the question first (chat_input is pinned to the bottom wherever it is called),
+# so the showroom disappears in the same run as the first question
+question = st.chat_input("พิมพ์คำถาม เช่น MT-09 ราคาเท่าไร") or st.session_state.pop("pending", None)
+if not st.session_state.messages and not question:
     showroom()
 
 for i, m in enumerate(st.session_state.messages):
@@ -391,7 +394,6 @@ for i, m in enumerate(st.session_state.messages):
         else:
             show_answer(i, m)
 
-question = st.chat_input("พิมพ์คำถาม เช่น MT-09 ราคาเท่าไร") or st.session_state.pop("pending", None)
 if question:
     history = chat_history()
     msgs = st.session_state.messages
