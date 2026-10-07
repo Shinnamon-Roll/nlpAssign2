@@ -10,7 +10,9 @@ deploy บน **Streamlit Community Cloud** + โค้ดอยู่บน **G
 **หัวข้อที่เลือก:** ผู้ช่วย AI ร้านขายรถบิ๊กไบค์มือสอง — ลูกค้าถามเรื่องรถในสต็อก
 (ราคา ปี เลขไมล์ สภาพ สเปค) และข้อมูลร้าน (รับประกัน ผ่อน เทิร์นรถ โอนเล่ม ติดต่อ/เวลาเปิด-ปิด)
 
-**แหล่งข้อมูล:** https://www.dbigbike.com/ — เว็บของผู้ใช้เอง อนุญาตให้ดึงข้อมูลรถและรูปภาพมาใช้ได้
+**แหล่งข้อมูล:** ร้านสมมติ **ไมล์แท้ บิ๊กไบค์ (MileTae Bigbike)** ผู้ช่วยชื่อ "พี่ไมล์" — ข้อมูลจำลองสำหรับ demo
+(ผู้ใช้สั่งเมื่อ 2026-10-07). จาก https://www.dbigbike.com/ (เว็บของผู้ใช้ อนุญาตแล้ว) ใช้เฉพาะ **รูปภาพ** + ข้อมูลฐานของรุ่น/ปี/สเปค;
+ราคา เลขไมล์ สภาพ และนโยบายร้านทั้งหมดแต่งขึ้นเอง ห้ามใส่ข้อความ/เบอร์/ลิงก์ของ dbigbike ใน `data/`
 
 ### ข้อกำหนดเทคนิค (ต้องครบทุกข้อ)
 1. **Document Loading & Chunking** — โหลดเอกสาร ทำความสะอาดข้อความ แบ่ง chunk ที่เหมาะสม
@@ -40,7 +42,8 @@ deploy บน **Streamlit Community Cloud** + โค้ดอยู่บน **G
 - **ห้าม commit API key เด็ดขาด** (โดนหักคะแนน) — อ่าน key ผ่าน `st.secrets["GEMINI_API_KEY"]` เท่านั้น
 - `.streamlit/secrets.toml` ต้องอยู่ใน `.gitignore` — ก่อน commit ทุกครั้ง grep หา key ใน diff
 - Streamlit Cloud RAM จำกัด (~1GB): ใช้ embedding model เล็ก, โหลด model + index **ครั้งเดียว** ด้วย `@st.cache_resource`
-- ร้านจริง → **ห้ามแต่งนโยบายร้าน** (รับประกัน/ดอกเบี้ย/เงื่อนไข) เอง ถ้าเว็บไม่มีให้ถามผู้ใช้
+- ร้านสมมติ → แต่งนโยบายร้านได้ แต่ต้อง **สอดคล้องกันทุกไฟล์** และระบุใน README/หน้าเว็บว่าเป็นร้านสมมติ
+- บอทยังต้องตอบจากเอกสารเท่านั้น — หัวข้อที่สงวนไว้เป็นคำถาม "ไม่พบข้อมูล" (เช่า รถยนต์ บริษัทประกัน สาขาต่างประเทศ) ห้ามเขียนลง `data/`
 - ทดสอบ URL จริงในโหมด Incognito ก่อนส่ง
 
 ## Stack
@@ -64,10 +67,14 @@ rag.py                 # backend: load → clean → chunk → embed → FAISS �
 requirements.txt
 README.md
 test_questions.csv     # question,expected_answer,answerable,source (agent: research)
+scrape.py              # ดึงประกาศ dbigbike → scraped/ (gitignored) ใช้ครั้งเดียวเป็นฐาน
+make_data.py           # data/bikes.csv → bike_*.md + inventory_summary.md
 data/
-  inventory_summary.md # ตารางสรุปรถทุกคัน + วันที่ดึงข้อมูล (ช่วยคำถามเปรียบเทียบ/กรองราคา)
-  bike_*.md            # 1 ไฟล์ต่อรถ 1 คัน, มีบรรทัด `รูปภาพ:` เก็บ URL รูปจาก dbigbike.com
-  shop_*.md            # ข้อมูลร้าน: ติดต่อ/เวลาเปิด, รับประกัน, ผ่อน, เทิร์น, โอนเล่ม, FAQ
+  bikes.csv            # master สต็อกรถ (แก้ที่นี่ แล้วรัน make_data.py)
+  inventory_summary.md # ตารางสรุปรถทุกคัน (generated)
+  bike_*.md            # 1 ไฟล์ต่อรถ 1 คัน (generated), มีบรรทัด `รูปภาพ:` เก็บ URL รูปจาก dbigbike.com
+  shop_*.md            # นโยบายร้านสมมติ: profile, รับประกัน, ไฟแนนซ์, เทิร์น, โอนเล่ม, จอง/ทดลองขับ, ส่งรถ/บริการ, FAQ
+  guide_*.md           # คู่มือเลือก/ดูแลรถ (เขียนเอง)
 .streamlit/secrets.toml  # local only, gitignored
 Source/NLP-SubTest2.ipynb  # ไฟล์โจทย์ (ต้องกรอกหัวข้อ + URL แล้วส่งคืน)
 ```

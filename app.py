@@ -10,35 +10,33 @@ from rag import NOT_FOUND, answer, build_index, retrieve
 DATA = Path(__file__).parent / "data"
 BOT = ":material/two_wheeler:"
 USER = ":material/person:"  # default user avatar is red, which is reserved for NOT_FOUND/error
-LINE_URL = "https://line.me/ti/p/~@dbigbike"
 TH_MONTHS = "ม.ค. ก.พ. มี.ค. เม.ย. พ.ค. มิ.ย. ก.ค. ส.ค. ก.ย. ต.ค. พ.ย. ธ.ค.".split()
 EXAMPLES = [
     "มี Yamaha MT-09 ไหม ราคาเท่าไร",
     "รถราคาไม่เกิน 300,000 บาทมีรุ่นไหนบ้าง",
     "ร้านเปิดกี่โมง อยู่ที่ไหน",
     "ผ่อนดอกเบี้ยกี่เปอร์เซ็นต์",
+    "มีบริการเช่ารถรายวันไหม",
 ]
 WELCOME = (
-    "สวัสดีครับ ผมเป็นผู้ช่วยของร้านดีเจริญยนต์ DBigbike "
-    "ถามเรื่องรถที่มีขายในร้านได้เลย ทั้งราคา ปี เลขไมล์ สภาพรถ และสเปค "
-    "รวมถึงเรื่องของร้าน เช่น เวลาเปิด-ปิด ที่ตั้ง การจัดไฟแนนซ์ และการรับซื้อรถ\n\n"
-    "ผมตอบจากข้อมูลบนเว็บร้านเท่านั้น และบอกทุกครั้งว่าใช้เอกสารไหนตอบ "
+    "สวัสดีครับ ผมพี่ไมล์ ผู้ช่วยเลือกรถของร้านไมล์แท้ บิ๊กไบค์ "
+    "อยากรู้อะไรเรื่องรถในโชว์รูมถามได้เลย ทั้งราคา ปี เลขไมล์ สภาพรถ และสเปค "
+    "รวมถึงเรื่องของร้าน เช่น การรับประกัน ไฟแนนซ์ เทิร์นรถ โอนเล่ม และเวลาเปิด-ปิด\n\n"
+    "ผมตอบจากเอกสารของร้านเท่านั้น และบอกทุกครั้งว่าใช้เอกสารไหนตอบ "
     "ถ้าเรื่องไหนไม่มีในข้อมูล ผมจะบอกตรงๆ ครับ"
 )
 EXT = 'target="_blank" rel="noopener noreferrer"'
 HINT = (
-    '<p class="db-hint">ถามร้านโดยตรงได้ที่ โทร <a href="tel:0661601119">066-160-1119</a> '
-    f'หรือ LINE <a href="{LINE_URL}" {EXT}>@dbigbike</a></p>'
+    '<p class="db-hint">ถามร้านโดยตรงได้ที่ โทร <a href="tel:021234567">02-123-4567</a> '
+    "หรือ LINE @miletae.demo</p>"
 )
 SIDEBAR = (
     '<div class="db-side">'
-    "<p>ซื้อ ขาย แลกเปลี่ยน บิ๊กไบค์มือสอง ถนนกาญจนาภิเษก ใกล้เดอะมอลล์บางแค</p>"
-    "<p>เปิดทุกวัน 9:00–18:00 น. ไม่มีวันหยุด</p>"
-    '<p>โทร <a href="tel:0661601119">066-160-1119</a><br>'
-    f'LINE <a href="{LINE_URL}" {EXT}>@dbigbike</a><br>'
-    f'<a href="https://www.facebook.com/dbigbike" {EXT}>Facebook ของร้าน</a><br>'
-    f'<a href="https://www.dbigbike.com/" {EXT}>เว็บไซต์ dbigbike.com</a></p>'
-    '<p class="db-muted">คำตอบในแชตนี้มาจากข้อมูลบนเว็บไซต์ร้านเท่านั้น</p>'
+    "<p>ร้านบิ๊กไบค์มือสองคัดสภาพ เลขไมล์แท้ทุกคัน ถนนราชพฤกษ์ ฝั่งธนบุรี กรุงเทพฯ</p>"
+    "<p>เปิด 10:00–19:00 น. หยุดทุกวันพุธ</p>"
+    '<p>โทร <a href="tel:021234567">02-123-4567</a><br>LINE @miletae.demo</p>'
+    '<p class="db-muted">ร้านสมมติสำหรับเดโมงานวิชา NLP รูปรถได้รับอนุญาตจาก dbigbike.com '
+    "ข้อมูลอื่นเป็นข้อมูลจำลอง</p>"
     "</div>"
 )
 CSS = """<style>
@@ -191,7 +189,7 @@ def error_text(e):
         return "โมเดลมีผู้ใช้งานมาก ลองส่งอีกครั้งในไม่กี่วินาทีนะครับ"
     if code in (400, 401, 403) and ("API key" in msg or "API_KEY" in msg or code != 400):
         return "GEMINI_API_KEY ใช้งานไม่ได้ ตรวจค่าใน Secrets ว่าถูกต้อง แล้วรีเฟรชหน้านี้ครับ"
-    return "ตอนนี้ติดต่อระบบตอบคำถามไม่ได้ ลองถามใหม่อีกครั้งนะครับ ถ้ายังไม่ได้ โทรถามร้านได้ที่ 066-160-1119"
+    return "ตอนนี้ติดต่อระบบตอบคำถามไม่ได้ ลองถามใหม่อีกครั้งนะครับ ถ้ายังไม่ได้ โทรถามร้านได้ที่ 02-123-4567"
 
 
 def ask(store, question, history, api_key):
@@ -228,12 +226,12 @@ def load_store():
     return build_index(str(DATA))
 
 
-st.set_page_config(page_title="ผู้ช่วยร้าน DBigbike", page_icon=BOT, layout="centered")
+st.set_page_config(page_title="พี่ไมล์ ผู้ช่วยเลือกบิ๊กไบค์", page_icon=BOT, layout="centered")
 st.html(CSS)
 st.session_state.setdefault("messages", [])
 
 with st.sidebar:
-    st.header("ดีเจริญยนต์ DBigbike", anchor=False)
+    st.header("ไมล์แท้ บิ๊กไบค์", anchor=False)
     show_html(SIDEBAR)
     st.button("ล้างแชต", on_click=st.session_state.messages.clear, width="stretch")
 

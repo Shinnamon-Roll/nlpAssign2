@@ -1,6 +1,6 @@
-"""Scrape ready-to-sell bikes + shop info from https://www.dbigbike.com/ into data/*.md.
+"""Scrape ready-to-sell bikes + shop info from https://www.dbigbike.com/ into scraped/*.md (raw input for make_data.py).
 
-Stdlib only. Re-runnable: rewrites data/bike_*.md, inventory_summary.md, shop_*.md, article_*.md.
+Stdlib only. Re-runnable: rewrites scraped/bike_*.md, inventory_summary.md, shop_*.md, article_*.md.
 Usage: python3 scrape.py          (scrape)
        python3 scrape.py --test   (parser self-check, no network)
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 
 BASE = "https://www.dbigbike.com"
 READY = "/category/2720/บิ๊กไบค์พร้อมขาย"
-DATA = Path(__file__).parent / "data"
+DATA = Path(__file__).parent / "scraped"  # raw dbigbike text, gitignored; data/ is built by make_data.py
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
 # python.org builds on macOS ship without CA certs; use the system bundle when present.
 CTX = ssl.create_default_context(cafile="/etc/ssl/cert.pem") if os.path.exists("/etc/ssl/cert.pem") else None
@@ -167,7 +167,7 @@ def bike_md(f):
 
 def write(name, text):
     (DATA / name).write_text(text, encoding="utf-8")
-    print(f"  wrote data/{name} ({len(text)} chars)")
+    print(f"  wrote scraped/{name} ({len(text)} chars)")
 
 
 def scrape_bikes(today):

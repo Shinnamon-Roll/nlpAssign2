@@ -6,22 +6,25 @@ No streamlit import here, so it runs from the CLI; app.py caches build_index() w
 import csv
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
+from sentence_transformers import SentenceTransformer  # before faiss: faiss-first segfaults on macOS (2 libomp)
 import faiss
 import numpy as np
 from google import genai
 from google.genai import errors, types
 from pythainlp.tokenize import sent_tokenize
 from pythainlp.util import normalize
-from sentence_transformers import SentenceTransformer
 
 NOT_FOUND = "ไม่พบข้อมูลในเอกสาร"
 GEMINI_MODEL = "gemini-3.8-flash"  # free tier; 2.5 models are closed to new keys
 FALLBACK_MODEL = "gemini-3.5-flash-lite"  # used once when GEMINI_MODEL answers 503 (busy) or 429 (quota)
 EMBED_MODEL = "intfloat/multilingual-e5-small"
-SCORE_THRESHOLD = 0.80  # e5 cosine scores sit in ~0.75-0.9; tuned with `python rag.py`, the prompt does the finer refusing
+SCORE_THRESHOLD = 0.78  # e5 scores are compressed (~0.75-0.93); this only blocks clearly off-topic queries,
+                        # in-domain questions without an answer score like real ones, so the prompt refuses those
 TOP_K = 5
+MAX_PER_SOURCE = 2  # keeps one long article from filling all 5 slots
 MAX_CHARS = 800  # per chunk body; ~800 Thai chars stays under e5's 512-token limit
 OVERLAP = 100
 TABLE_ROWS = 6  # inventory rows per chunk, header repeated; 8 rows hit ~600 tokens and got truncated
@@ -30,11 +33,11 @@ INVENTORY = "inventory_summary.md"
 
 IMAGE_KEY = "รูปภาพ"
 URL_KEYS = ("ลิงก์ประกาศ", "ลิงก์บทความ")
-ZERO_WIDTH = re.compile("[​-‍⁠﻿]")
+ZERO_WIDTH = re.compile("[\u200b-\u200d\u2060\ufeff]")
 RULE = re.compile(r"^[-=_*~]{3,}$")  # "-----" separator lines
 TABLE_SEP = re.compile(r"^\|[\s:|-]+\|$")
 
-SYSTEM_PROMPT = f"""คุณคือผู้ช่วยขายของร้านดีเจริญยนต์ (D Bigbike) ร้านรถบิ๊กไบค์มือสอง
+SYSTEM_PROMPT = f"""คุณคือพี่ไมล์ ผู้ช่วยขายของร้านไมล์แท้ บิ๊กไบค์ (MileTae Bigbike) ร้านบิ๊กไบค์มือสอง
 กติกา:
 1. ตอบจากข้อมูลใน "เอกสารอ้างอิง" ที่ให้มาในข้อความล่าสุดเท่านั้น ห้ามใช้ความรู้ภายนอก
    แต่เปรียบเทียบ เรียงลำดับ นับ หรือกรองข้อมูลในเอกสารได้ เช่น หาคันที่ถูกที่สุด/ไมล์น้อยที่สุด หรือรถงบไม่เกิน 300,000 บาท
@@ -154,33 +157,49 @@ def _chunk_doc(doc):
 def build_index(data_dir="data"):
     docs = [_load(p) for p in sorted(Path(data_dir).glob("*.md"))]
     chunks = [c for d in docs for c in _chunk_doc(d)]
-    model = SentenceTransformer(EMBED_MODEL)
-    emb = model.encode([f"passage: {c['text']}" for c in chunks], normalize_embeddings=True, batch_size=32)
+    model = SentenceTransformer(EMBED_MODEL, device="cpu")  # same as Streamlit Cloud; ~460 MB fp32
+    # small batches cap the attention-matrix peak (~90 MB less than 32), same speed on CPU
+    emb = model.encode([f"passage: {c['text']}" for c in chunks], normalize_embeddings=True, batch_size=8)
     index = faiss.IndexFlatIP(emb.shape[1])  # inner product on unit vectors = cosine
     index.add(np.asarray(emb, dtype="float32"))
     full_text = {d["source"]: "\n".join(d["lines"]) for d in docs}  # inventory goes to the LLM whole
     return {"model": model, "index": index, "chunks": chunks, "full_text": full_text}
 
 
-def retrieve(store, query, k=TOP_K):
+def _rank(store, query):
+    """All chunks with cosine scores, best first. ponytail: flat scan of every chunk, fine up to a few thousand."""
     q = store["model"].encode([f"query: {query}"], normalize_embeddings=True)
-    scores, ids = store["index"].search(np.asarray(q, dtype="float32"), k)
+    scores, ids = store["index"].search(np.asarray(q, dtype="float32"), store["index"].ntotal)
     return [dict(store["chunks"][i], score=float(s)) for s, i in zip(scores[0], ids[0]) if i != -1]
 
 
+def _top(hits, k):
+    """Best-first, one copy per chunk (its best score), at most MAX_PER_SOURCE chunks per file."""
+    out, seen, per_source = [], set(), Counter()
+    for h in sorted(hits, key=lambda h: -h["score"]):
+        key = (h["source"], h["text"])
+        if key in seen or per_source[h["source"]] >= MAX_PER_SOURCE:
+            continue
+        seen.add(key)
+        per_source[h["source"]] += 1
+        out.append(h)
+        if len(out) == k:
+            break
+    return out
+
+
+def retrieve(store, query, k=TOP_K):
+    return _top(_rank(store, query), k)
+
+
 def search(store, question, history=(), k=TOP_K):
-    """Retrieve for the question alone and, for follow-ups, for previous user question + question.
-    Merge by best score per chunk so "คันนี้ผ่อนเท่าไร" still finds the bike from the previous turn."""
+    """Rank for the question alone and, for follow-ups, for previous user question + question; keep each
+    chunk's best score, so "คันนี้ผ่อนเท่าไร" still finds the bike from the previous turn."""
     prev = next((m["content"] for m in reversed(history) if m["role"] == "user"), "")
-    hits = retrieve(store, question, k)
+    hits = _rank(store, question)
     if prev:
-        best = {}
-        for h in retrieve(store, f"{prev} {question}", k) + hits:
-            key = (h["source"], h["text"])
-            if key not in best or h["score"] > best[key]["score"]:
-                best[key] = h
-        hits = sorted(best.values(), key=lambda h: -h["score"])[:k]
-    return hits
+        hits += _rank(store, f"{prev} {question}")
+    return _top(hits, k)
 
 
 # ---------- prompt + LLM ----------
@@ -204,6 +223,9 @@ def answer(store, question, history, api_key):
     sources = search(store, question, history)
     if not sources or sources[0]["score"] < SCORE_THRESHOLD:
         return NOT_FOUND, sources
+    if not any(c["source"] == INVENTORY for c in sources):
+        # pin the stock table: dense retrieval can't filter "under 100,000 / cheapest", the LLM can with the table
+        sources += [h for h in _rank(store, question) if h["source"] == INVENTORY][:1]
     turns = [m for m in history if m.get("content")][-2 * HISTORY_TURNS:]
     while turns and turns[0]["role"] != "user":  # Gemini history should open with a user turn
         turns = turns[1:]
@@ -231,6 +253,10 @@ def answer(store, question, history, api_key):
 
 # ---------- retrieval check (no LLM call unless --live) ----------
 if __name__ == "__main__":
+    assert _kv("- **ราคาขาย (บาท):** 289,000") == ("ราคาขาย (บาท)", "289,000")
+    assert _kv("https://www.dbigbike.com/") is None
+    assert all(len(c) <= 50 for c in _pack(["a" * 20] * 10, "\n", 50, 25))
+    assert _pack(["a", "b", "c"], "\n", 3, 1) == ["a\nb", "b\nc"]  # 1-unit overlap carried over
     root = Path(__file__).parent
     store = build_index(root / "data")
     lens = [len(c["text"]) for c in store["chunks"]]
@@ -240,18 +266,7 @@ if __name__ == "__main__":
     over = sum(len(tok(f"passage: {c['text']}")["input_ids"]) > store["model"].max_seq_length for c in store["chunks"])
     print(f"chunks over {store['model'].max_seq_length} tokens (truncated): {over}")
 
-    csv_path = root / "test_questions.csv"
-    rows = list(csv.DictReader(csv_path.open(encoding="utf-8-sig"))) if csv_path.exists() else []
-    if not rows:
-        print("test_questions.csv not found, using sample queries")
-        rows = [{"question": q, "answerable": a, "source": s} for q, a, s in [
-            ("Yamaha MT09 ราคาเท่าไร", "yes", "bike_35_yamaha_mt09_2022.md"),
-            ("ร้านเปิดกี่โมง", "yes", "shop_contact.md"),
-            ("รถคันไหนถูกที่สุด", "yes", INVENTORY),
-            ("ดอกเบี้ยผ่อนกี่เปอร์เซ็นต์", "no", ""),
-            ("ร้านมีบริการล้างรถฟรีไหม", "no", ""),
-            ("What is the weather in Tokyo today?", "no", ""),
-        ]]
+    rows = list(csv.DictReader((root / "test_questions.csv").open(encoding="utf-8-sig")))
     hits, n_ans, unans = 0, 0, []
     for r in rows:
         # "(ถามต่อจากคำถามเรื่อง X) Q" rows run through the real follow-up path with X as the previous turn
@@ -283,7 +298,7 @@ if __name__ == "__main__":
         key = tomllib.loads((root / ".streamlit" / "secrets.toml").read_text())["GEMINI_API_KEY"]
         history = []
         for q in ["Yamaha MT09 ราคาเท่าไร", "คันนี้ผ่อนเดือนละเท่าไร", "ดอกเบี้ยผ่อนกี่เปอร์เซ็นต์",
-                  "Which bike is the cheapest?"]:
+                  "Which bike is the cheapest?", "มีรถราคาต่ำกว่า 100,000 บาทรุ่นอะไรบ้าง", "Honda Civic มือสองราคาเท่าไร"]:
             text, src = answer(store, q, history, key)
             print(f"\n>>> {q}\n{text}\n    sources: {[(h['source'], round(h['score'], 3)) for h in src]}")
             history += [{"role": "user", "content": q}, {"role": "assistant", "content": text}]
