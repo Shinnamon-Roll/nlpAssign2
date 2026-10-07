@@ -19,3 +19,6 @@ baseRadius = "small"
 backgroundColor = "#F7F8F9"
 headingFontSizes = ["24px", "24px", "18px"]
 headingFontWeights = 600
+
+[client]
+toolbarMode = "minimal"
