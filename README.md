@@ -5,7 +5,7 @@
 (รับประกัน ไฟแนนซ์ เทิร์นรถ โอนเล่ม จอง/ทดลองขับ ส่งรถ)
 โดยตอบจากเอกสารของร้านเท่านั้น แสดงเอกสารอ้างอิงทุกคำตอบ และตอบว่า "ไม่พบข้อมูลในเอกสาร" เมื่อเอกสารไม่มีคำตอบ
 
-- เว็บแอป (Streamlit Community Cloud): _TODO: ใส่ URL หลัง deploy_
+- เว็บแอป (Streamlit Community Cloud): https://miletae-bigbike.streamlit.app/
 - GitHub: https://github.com/Shinnamon-Roll/nlpAssign2
 
 ## แนวคิดของ Domain
